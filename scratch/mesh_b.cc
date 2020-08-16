@@ -86,9 +86,9 @@
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/wifi-module.h"
-#include "ns3/mesh-module.h"
+#include "ns3/m_mesh-module.h"
 #include "ns3/mobility-module.h"
-#include "ns3/mesh-helper.h"
+#include "ns3/m_mesh-helper.h"
 
 #include <iostream>
 #include <sstream>
@@ -96,7 +96,9 @@
 #include "ns3/netanim-module.h"
 #include "ns3/flow-monitor-module.h"
 
-#include "ns3/hwmp-protocol.h" //Richard
+#include "ns3/m_hwmp-protocol.h" //Richard
+
+
 
 using namespace ns3;
 
@@ -237,10 +239,10 @@ MeshTest::MeshTest () :
   //Richard: reducing m_step to less than 50, results in crazy interference and messes up multi-hoping as can be seen from visualizer
   m_step (100.0), //Richard: originally set to "100". I presume m_step is the distance between nodes, which means total grid horizontal distance = m_xSize *m_step
   m_randomStart (0.1),
-  m_totalTime (10.0), //Richard: simulation time in seconds, I think?
-  m_packetInterval (0.0001), //Richard: originally (0.1), now set to 0.0001 does seem to affect throughput; this means packet is sent every <interval> second over simulation period
+  m_totalTime (50.0), //Richard: simulation time in seconds, I think?
+  m_packetInterval (0.001), //Richard: originally (0.1), now set to 0.0001 does seem to affect throughput; this means packet is sent every <interval> second over simulation period
   m_packetSize (1024), //Richard: found it at 1024
-  m_nIfaces (1), //Richard: this might be a good start to setup multiradio nodes
+  m_nIfaces (2), //Richard: this might be a good start to setup multiradio nodes
   m_chan (true),
   m_pcap (false), //Richard: original setting
   //m_pcap (true), //Richard: try out true; simulation seem to take longer when "true"
@@ -487,7 +489,8 @@ MeshTest::CreateNodes ()
 
 
 
-  Config::Set ("/NodeList/3/DeviceList/*/$ns3::WifiNetDevice/Phy/RxNoiseFigure", DoubleValue (8)); //DEFAULT IS 7
+   Config::Set ("/NodeList/3/DeviceList/*/$ns3::WifiNetDevice/Phy/RxNoiseFigure", DoubleValue (8)); //Richard: DEFAULT = 7;
+
 
   /*
    * Richard; test logic to get nodes noise
@@ -539,13 +542,22 @@ MeshTest::CreateNodes ()
     * along the y and x axes only
     */
 
-
   /*
-   * Richard: uncomment this block to position nodes for Airtime vs a_Airtime metric performance evaluation.
+   * Richard: uncomment this block to position nodes in a 3-node bus topology to test things.
    * Also, check dot11s-installer.cc for mesh root addresses
    */
+/*
+   positionAlloc->Add (Vector (  0, 0, 0)); //position of first node in "nodes"
+   positionAlloc->Add (Vector (  2*m_step, 0, 0));
+   positionAlloc->Add (Vector (  m_step, 0, 0)); //the only node in "nodes2" container
 
+*/
+  /*
+   * Richard: uncomment this block to position nodes for Airtime vs a_Airtime metric performance evaluation.
+   * Also, check dot11s-installer.cc, about line 100-111 for mesh root addresses
+   */
 
+/*
    positionAlloc->Add (Vector (  0, 350, 0)); //position of first node in "nodes"
 
    //top row
@@ -568,12 +580,14 @@ MeshTest::CreateNodes ()
    positionAlloc->Add (Vector (  m_step*2, 350, 0));
    positionAlloc->Add (Vector (  m_step*3, 350, 0)); //position of 3rd node in "nodes2"
 
+*/
+
    /********************************************************************************************
     * Richard: uncomment this block to position nodes for etx and augmented etx performance evaluation
     * Also, check dot11s-installer.cc for mesh root addresses
     */
 
-  /*
+
     positionAlloc->Add (Vector (  0, 350, 0)); //node 0
 
 
@@ -594,7 +608,7 @@ MeshTest::CreateNodes ()
      positionAlloc->Add (Vector (  m_step*2, 350+m_step, 0));//node 8
      positionAlloc->Add (Vector (  m_step*2, 350, 0)); //node 9
      positionAlloc->Add (Vector (  m_step*3, 350+m_step, 0));//node 10
- */
+
 
      /*
       * Richard: uncomment this block to position nodes for hop-count vs a_hop-count evaluation.
@@ -623,8 +637,8 @@ MeshTest::CreateNodes ()
      positionAlloc->Add (Vector (  m_step, 350, 0)); //position of 1st node in "nodes?
      positionAlloc->Add (Vector (  m_step*2, 350, 0));
      positionAlloc->Add (Vector (  m_step*3, 350, 0)); //position of 3rd node in "nodes2"
-*/
 
+*/
 
   mobility.SetPositionAllocator (positionAlloc);
 
@@ -668,6 +682,9 @@ MeshTest::InstallApplication ()
   ApplicationContainer serverApps = echoServer.Install (nodes.Get (0));
   serverApps.Start (Seconds (0.0));
   serverApps.Stop (Seconds (m_totalTime));
+  /*
+   * Richard: FlowID1: the following line specifies the destination node???
+   */
   UdpEchoClientHelper echoClient (interfaces.GetAddress (0), 9);
   //Richard: comment these out, work with traffic in run() only and to see if throughput goes up
   echoClient.SetAttribute ("MaxPackets", UintegerValue ((uint32_t)(m_totalTime*(1/m_packetInterval))));
@@ -678,6 +695,10 @@ MeshTest::InstallApplication ()
   /*
    * Richard; install echo client on the last node in nodes container.
    * nodes2 has three nodes that are placed in between so they are able to forward traffic to the echoclient
+   */
+
+  /*
+   * Richard: FlowID2: the following line specifies the source node???
    */
 
   ApplicationContainer clientApps = echoClient.Install (nodes.Get (m_xSize*m_ySize-1)); //Richard: original echoclient
@@ -781,6 +802,8 @@ MeshTest::ReceivePacket (Ptr<Socket> socket)
 int
 MeshTest::Run ()
 {
+	SeedManager::SetSeed (1);  // Changes seed from default of 1 to whatever is specified
+	SeedManager::SetRun (23);   // Changes run number from default of 1 to whatever is specified
   //Richard: unsure if this is the best place for this but, lets see..
 // Richard; decided to move this logic to MeshTest::createNodes
 	/*
@@ -872,7 +895,8 @@ MeshTest::Run ()
   */
 
   //the (.) before the file path moves one step out of directory of execution
-  AnimationInterface  anim ("./visualisation_files/mesh_b_with_airtime-count-metric_at_11Mbps_TEST2.xml"); //trace file
+ // AnimationInterface  anim ("./visualisation_files/vis_test_augmented_airtime_scaling_beta_0.1_with_rxnoise.xml"); //trace file
+  AnimationInterface  anim ("./visualisation_files/thesis_resubmission_works/vis_test_m_HWMP_airtime-augmented.xml"); //trace file
   /*animation-interface.h defines #define 	MAX_PKTS_PER_TRACE_FILE   100000*/
   anim.SetMaxPktsPerTraceFile(m_maxPktsPerFile);
   //anim.EnablePacketMetadata(true); //needs to be done earlier in the program i.e. before packet sending starts.
@@ -888,7 +912,7 @@ MeshTest::Run ()
    *  routing table at different points withing the interval
    */
    /* this is only going to work when doing layer 2 routing*/
-  anim.EnableIpv4RouteTracking ("hwmp-route-using-default-metric.xml", Seconds (0), Seconds (120), Seconds (0.25));
+  //anim.EnableIpv4RouteTracking ("hwmp-route-using-default-metric.xml", Seconds (0), Seconds (120), Seconds (0.25));
 
     /***
      * END animation code
@@ -957,7 +981,11 @@ MeshTest::Run ()
 
   Simulator::Run ();
   //the "." before the file path moves one step out of directory of execution
-  flowmon->SerializeToXmlFile (("./folder_for_measurements/mesh_b_with_airtime-metric_at_11Mbps_TEST2.xml"), false, false); //my version ~Richard
+  //flowmon->SerializeToXmlFile (("./folder_for_measurements/test_augmented_airtime_scaling_beta_0.1_with_rxnoise.xml"), false, false); //my version ~Richard
+  //flowmon->SerializeToXmlFile (("./folder_for_measurements/setup-tests/test_m_HWMP_airtime-augmented.xml"), false, false); //my version ~Richard
+  flowmon->SerializeToXmlFile (("./folder_for_measurements/thesis_resubmission_works/test_m_HWMP_airtime_totalTime-50_setRun-23.xml"), false, false); //my version ~Richard
+
+
 
   /*
    * Try displaying stats, this block needs debugging.
@@ -1026,7 +1054,31 @@ MeshTest::Report ()
 int
 main (int argc, char *argv[])
 {
+//***************************************************************************************************
+/*
+	std::ifstream inFile; //Richard
+  //inFile.open("/home/richard/eclipse_workspace/ns3_programming/scratch/ntwenu.txt"); //full file path required
+  inFile.open("/home/richard/workspace/ns3_programming/scratch/ntwenu.txt");
+  int network_class;//Richard: give it some random initial value
+  if(inFile.fail())
+  {
+	  std::cout<<"Cannot open network status file"<<std::endl;
+	  exit(1);
+  }
+
+
+  inFile>>network_class; //Richard: see what network class is in the file
+
   std::cout<<"In main(), starting simulation..."<<std::endl;
+  std::cout<<"In main(), Network class: "<<network_class<<std::endl;
+*/
+	//int network_class;
+	std::string filename = "/home/richard/workspace/ns3_programming/scratch/ntwenu.txt";
+	std::ofstream inFile;
+	inFile.open("/home/richard/workspace/ns3_programming/scratch/ntwenu.txt2");
+	//inFile>>network_class;
+//**************************************************************************************************
+
   MeshTest t; 
   t.Configure (argc, argv);
 
